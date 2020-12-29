@@ -123,7 +123,7 @@ bool setSockNonblocking(SOCKET listener, SOCKET newSock);
 
 namespace CNSocketEncryption {
     // you won't believe how complicated they made it in the client :facepalm:
-    static constexpr const char* defaultKey = "m@rQn~W#";
+    static constexpr const char* defaultKey = "#T_yQn~W";
     static const unsigned int keyLength = 8;
 
     int Encrypt_byte_change_A(int ERSize, uint8_t* data, int size);

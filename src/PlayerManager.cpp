@@ -43,9 +43,6 @@ void PlayerManager::init() {
     REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_EXIT, exitGame);
     REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_SPECIAL_STATE_SWITCH, setSpecialSwitchPlayer);
     REGISTER_SHARD_PACKET(P_CL2FE_GM_REQ_PC_SPECIAL_STATE_SWITCH, setGMSpecialSwitchPlayer);
-    REGISTER_SHARD_PACKET(P_CL2FE_GM_REQ_TARGET_PC_SPECIAL_STATE_ONOFF, setGMSpecialOnOff);
-    REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_VEHICLE_ON, enterPlayerVehicle);
-    REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_VEHICLE_OFF, exitPlayerVehicle);
     REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_CHANGE_MENTOR, changePlayerGuide);
     REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_FIRST_USE_FLAG_SET, setFirstUseFlag);
     REGISTER_SHARD_PACKET(P_CL2FE_GM_REQ_PC_LOCATION, locatePlayer);
@@ -305,8 +302,6 @@ void PlayerManager::enterPlayer(CNSocket* sock, CNPacketData* data) {
     ChatManager::sendServerMessage(sock, settings::MOTDSTRING);
 
     addPlayer(sock, plr);
-    // check if there is an expiring vehicle
-    ItemManager::checkItemExpire(sock, getPlayer(sock));
 
     // set player equip stats
     ItemManager::setItemStats(getPlayer(sock));
@@ -818,7 +813,6 @@ void PlayerManager::revivePlayer(CNSocket* sock, CNPacketData* data) {
     response.PCRegenData.iY = y;
     response.PCRegenData.iZ = z;
     response.PCRegenData.iHP = plr->HP;
-    response.iFusionMatter = plr->fusionmatter;
     response.bMoveLocation = 0;
     response.PCRegenData.iMapNum = MAPNUM(plr->instanceID);
 
@@ -849,52 +843,6 @@ void PlayerManager::revivePlayer(CNSocket* sock, CNPacketData* data) {
 
     ChunkManager::updatePlayerChunk(sock, plr->chunkPos, std::make_tuple(0, 0, 0)); // force player to reload chunks
     updatePlayerPosition(sock, x, y, z, plr->instanceID, plr->angle);
-}
-
-void PlayerManager::enterPlayerVehicle(CNSocket* sock, CNPacketData* data) {
-    Player* plr = getPlayer(sock);
-
-    bool expired = plr->Equip[8].iTimeLimit < getTimestamp() && plr->Equip[8].iTimeLimit != 0;
-
-    if (plr->Equip[8].iID > 0 && !expired) {
-        INITSTRUCT(sP_FE2CL_PC_VEHICLE_ON_SUCC, response);
-        sock->sendPacket((void*)&response, P_FE2CL_PC_VEHICLE_ON_SUCC, sizeof(sP_FE2CL_PC_VEHICLE_ON_SUCC));
-
-        // send to other players
-        plr->iPCState |= 8;
-        INITSTRUCT(sP_FE2CL_PC_STATE_CHANGE, response2);
-        response2.iPC_ID = plr->iID;
-        response2.iState = plr->iPCState;
-        sendToViewable(sock, (void*)&response2, P_FE2CL_PC_STATE_CHANGE, sizeof(sP_FE2CL_PC_STATE_CHANGE));
-
-    } else {
-        INITSTRUCT(sP_FE2CL_PC_VEHICLE_ON_FAIL, response);
-        sock->sendPacket((void*)&response, P_FE2CL_PC_VEHICLE_ON_FAIL, sizeof(sP_FE2CL_PC_VEHICLE_ON_FAIL));
-
-        // check if vehicle didn't expire
-        if (expired) {
-            plr->toRemoveVehicle.eIL = 0;
-            plr->toRemoveVehicle.iSlotNum = 8;
-            ItemManager::checkItemExpire(sock, plr);
-        }
-    }
-}
-
-void PlayerManager::exitPlayerVehicle(CNSocket* sock, CNPacketData* data) {
-    Player* plr = getPlayer(sock);
-
-    if (plr->iPCState & 8) {
-        INITSTRUCT(sP_FE2CL_PC_VEHICLE_OFF_SUCC, response);
-        sock->sendPacket((void*)&response, P_FE2CL_PC_VEHICLE_OFF_SUCC, sizeof(sP_FE2CL_PC_VEHICLE_OFF_SUCC));
-
-        // send to other players
-        plr->iPCState &= ~8;
-        INITSTRUCT(sP_FE2CL_PC_STATE_CHANGE, response2);
-        response2.iPC_ID = plr->iID;
-        response2.iState = plr->iPCState;
-
-        sendToViewable(sock, (void*)&response2, P_FE2CL_PC_STATE_CHANGE, sizeof(sP_FE2CL_PC_STATE_CHANGE));
-    }
 }
 
 void PlayerManager::setSpecialSwitchPlayer(CNSocket* sock, CNPacketData* data) {

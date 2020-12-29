@@ -416,7 +416,6 @@ void CNLoginServer::characterCreate(CNSocket* sock, CNPacketData* data) {
         std::cout << "\tEye Color: " << (int)character->PCStyle.iEyeColor << std::endl;
         std::cout << "\tHeight: " << (int)character->PCStyle.iHeight << std::endl;
         std::cout << "\tBody: " << (int)character->PCStyle.iBody << std::endl;
-        std::cout << "\tClass: " << (int)character->PCStyle.iClass << std::endl;
         std::cout << "\tiEquipUBID: " << (int)character->sOn_Item.iEquipUBID << std::endl;
         std::cout << "\tiEquipLBID: " << (int)character->sOn_Item.iEquipLBID << std::endl;
         std::cout << "\tiEquipFootID: " << (int)character->sOn_Item.iEquipFootID << std::endl;

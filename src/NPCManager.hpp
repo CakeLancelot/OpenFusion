@@ -81,7 +81,6 @@ namespace NPCManager {
     void npcVendorSell(CNSocket* sock, CNPacketData* data);
     void npcVendorBuyback(CNSocket* sock, CNPacketData* data);
     void npcVendorBuyBattery(CNSocket* sock, CNPacketData* data);
-    void npcCombineItems(CNSocket* sock, CNPacketData* data);
 
     void handleWarp(CNSocket* sock, int32_t warpId);
     BaseNPC *summonNPC(int x, int y, int z, uint64_t instance, int type, bool respawn=false, bool baseInstance=false);

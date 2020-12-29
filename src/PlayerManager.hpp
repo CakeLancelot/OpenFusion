@@ -52,9 +52,6 @@ namespace PlayerManager {
     void warpToPlayer(CNSocket *sock, CNPacketData *data);
     void teleportPlayer(CNSocket *sock, CNPacketData *data);
 
-    void enterPlayerVehicle(CNSocket* sock, CNPacketData* data);
-    void exitPlayerVehicle(CNSocket* sock, CNPacketData* data);
-
     void setFirstUseFlag(CNSocket* sock, CNPacketData* data);
 
     Player *getPlayer(CNSocket* key);

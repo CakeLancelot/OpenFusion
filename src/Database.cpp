@@ -742,15 +742,7 @@ void Database::getCharInfo(std::vector <sP_LS2CL_REP_CHAR_INFO>* result, int use
 
         sqlite3_prepare_v2(db, sql2, -1, &stmt2, NULL);
         sqlite3_bind_int(stmt2, 1, toAdd.sPC_Style.iPC_UID);
-        sqlite3_bind_int(stmt2, 2, AEQUIP_COUNT);
 
-        while (sqlite3_step(stmt2) == SQLITE_ROW) {
-            sItemBase* item = &toAdd.aEquip[sqlite3_column_int(stmt2, 0)];
-            item->iType = sqlite3_column_int(stmt2, 1);
-            item->iID = sqlite3_column_int(stmt2, 2);
-            item->iOpt = sqlite3_column_int(stmt2, 3);
-            item->iTimeLimit = sqlite3_column_int(stmt2, 4);
-        }
         sqlite3_finalize(stmt2);
 
         result->push_back(toAdd);
@@ -926,12 +918,10 @@ void Database::getPlayer(Player* plr, int id) {
         item->iType = sqlite3_column_int(stmt, 1);
         item->iID = sqlite3_column_int(stmt, 2);
         item->iOpt = sqlite3_column_int(stmt, 3);
-        item->iTimeLimit = sqlite3_column_int(stmt, 4);
     }
 
     sqlite3_finalize(stmt);
 
-    Database::removeExpiredVehicles(plr);
 
     // get quest inventory
     sql = R"(
@@ -1137,7 +1127,6 @@ void Database::updatePlayer(Player *player) {
         sqlite3_bind_int(stmt, 3, player->Equip[i].iType);
         sqlite3_bind_int(stmt, 4, player->Equip[i].iOpt);
         sqlite3_bind_int(stmt, 5, player->Equip[i].iID);
-        sqlite3_bind_int(stmt, 6, player->Equip[i].iTimeLimit);
 
         rc = sqlite3_step(stmt);
 
@@ -1159,7 +1148,6 @@ void Database::updatePlayer(Player *player) {
         sqlite3_bind_int(stmt, 3, player->Inven[i].iType);
         sqlite3_bind_int(stmt, 4, player->Inven[i].iOpt);
         sqlite3_bind_int(stmt, 5, player->Inven[i].iID);
-        sqlite3_bind_int(stmt, 6, player->Inven[i].iTimeLimit);
 
         if (sqlite3_step(stmt) != SQLITE_DONE) {
             std::cout << "[WARN] Database: Failed to save player to database: " << sqlite3_errmsg(db) << std::endl;
@@ -1179,7 +1167,6 @@ void Database::updatePlayer(Player *player) {
         sqlite3_bind_int(stmt, 3, player->Bank[i].iType);
         sqlite3_bind_int(stmt, 4, player->Bank[i].iOpt);
         sqlite3_bind_int(stmt, 5, player->Bank[i].iID);
-        sqlite3_bind_int(stmt, 6, player->Bank[i].iTimeLimit);
 
         if (sqlite3_step(stmt) != SQLITE_DONE) {
             std::cout << "[WARN] Database: Failed to save player to database: " << sqlite3_errmsg(db) << std::endl;
@@ -1301,40 +1288,6 @@ void Database::updatePlayer(Player *player) {
 
     sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
     sqlite3_finalize(stmt);
-}
-
-void Database::removeExpiredVehicles(Player* player) {
-    int32_t currentTime = getTimestamp();
-
-    // if there are expired vehicles in bank just remove them silently
-    for (int i = 0; i < ABANK_COUNT; i++) {
-        if (player->Bank[i].iType == 10 && player->Bank[i].iTimeLimit < currentTime && player->Bank[i].iTimeLimit != 0) {
-            memset(&player->Bank[i], 0, sizeof(sItemBase));
-        }
-    }
-
-    // we want to leave only 1 expired vehicle on player to delete it with the client packet
-    std::vector<sItemBase*> toRemove;
-
-    // equipped vehicle
-    if (player->Equip[8].iOpt > 0 && player->Equip[8].iTimeLimit < currentTime && player->Equip[8].iTimeLimit != 0) {
-        toRemove.push_back(&player->Equip[8]);
-        player->toRemoveVehicle.eIL = 0;
-        player->toRemoveVehicle.iSlotNum = 8;
-    }
-    // inventory
-    for (int i = 0; i < AINVEN_COUNT; i++) {
-        if (player->Inven[i].iType == 10 && player->Inven[i].iTimeLimit < currentTime && player->Inven[i].iTimeLimit != 0) {
-            toRemove.push_back(&player->Inven[i]);
-            player->toRemoveVehicle.eIL = 1;
-            player->toRemoveVehicle.iSlotNum = i;
-        }
-    }
-
-    // delete all but one vehicles, leave last one for ceremonial deletion
-    for (int i = 0; i < (int)toRemove.size()-1; i++) {
-        memset(toRemove[i], 0, sizeof(sItemBase));
-    }
 }
 
 // buddies
@@ -1546,7 +1499,7 @@ sItemBase* Database::getEmailAttachments(int playerID, int index) {
 
     sItemBase* items = new sItemBase[4];
     for (int i = 0; i < 4; i++)
-        items[i] = { 0, 0, 0, 0 };
+        items[i] = { 0, 0, 0 };
 
     const char* sql = R"(
         SELECT Slot, ID, Type, Opt, TimeLimit
@@ -1568,7 +1521,6 @@ sItemBase* Database::getEmailAttachments(int playerID, int index) {
         items[slot].iID = sqlite3_column_int(stmt, 1);
         items[slot].iType = sqlite3_column_int(stmt, 2);
         items[slot].iOpt = sqlite3_column_int(stmt, 3);
-        items[slot].iTimeLimit = sqlite3_column_int(stmt, 4);
     }
 
     sqlite3_finalize(stmt);
@@ -1757,7 +1709,6 @@ bool Database::sendEmail(EmailData* data, std::vector<sItemBase> attachments) {
         sqlite3_bind_int(stmt, 4, item.iID);
         sqlite3_bind_int(stmt, 5, item.iType);
         sqlite3_bind_int(stmt, 6, item.iOpt);
-        sqlite3_bind_int(stmt, 7, item.iTimeLimit);
 
         if (sqlite3_step(stmt) != SQLITE_DONE) {
             std::cout << "[WARN] Database: Failed to send email: " << sqlite3_errmsg(db) << std::endl;

@@ -389,12 +389,12 @@ int MissionManager::giveMissionReward(CNSocket *sock, int task, int choice) {
 
             // delete any temp items we might have set
             for (int j = 0; j < i; j++) {
-                plr->Inven[slots[j]] = { 0, 0, 0, 0 }; // empty
+                plr->Inven[slots[j]] = { 0, 0, 0 }; // empty
             }
             return -1;
         }
         
-        plr->Inven[slots[i]] = { 999, 999, 999, 0 }; // temp item; overwritten later
+        plr->Inven[slots[i]] = { 999, 999, 999 }; // temp item; overwritten later
     }
 
     uint8_t respbuf[CN_PACKET_BUFFER_SIZE];

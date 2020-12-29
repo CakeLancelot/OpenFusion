@@ -659,7 +659,6 @@ void BuddyManager::emailReceiveItemSingle(CNSocket* sock, CNPacketData* data) {
     sItemBase& itemTo = plr->Inven[pkt->iSlotNum];
     itemTo.iID = itemFrom.iID;
     itemTo.iOpt = itemFrom.iOpt;
-    itemTo.iTimeLimit = itemFrom.iTimeLimit;
     itemTo.iType = itemFrom.iType;
     
     INITSTRUCT(sP_FE2CL_REP_PC_RECV_EMAIL_ITEM_SUCC, resp);
@@ -701,7 +700,6 @@ void BuddyManager::emailReceiveItemAll(CNSocket* sock, CNPacketData* data) {
         sItemBase& itemTo = plr->Inven[slot];
         itemTo.iID = itemFrom.iID;
         itemTo.iOpt = itemFrom.iOpt;
-        itemTo.iTimeLimit = itemFrom.iTimeLimit;
         itemTo.iType = itemFrom.iType;
 
         // update inventory
@@ -773,7 +771,7 @@ void BuddyManager::emailSend(CNSocket* sock, CNPacketData* data) {
         attachments.push_back(attachment.ItemInven);
         attSlots.push_back(attachment.iSlotNum);
         // delete item
-        plr->Inven[attachment.iSlotNum] = { 0, 0, 0, 0 };
+        plr->Inven[attachment.iSlotNum] = { 0, 0, 0, };
     }
 
     int cost = pkt->iCash + 50 + 20 * attachments.size(); // attached taros + postage

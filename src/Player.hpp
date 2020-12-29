@@ -65,8 +65,6 @@ struct Player {
     sItemBase QInven[AQINVEN_COUNT];
     int32_t CurrentMissionID;
 
-    sTimeLimitItemDeleteInfo2CL toRemoveVehicle;
-
     int32_t iIDGroup;
     int groupCnt;
     int32_t groupIDs[4];

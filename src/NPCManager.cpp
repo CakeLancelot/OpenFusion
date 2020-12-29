@@ -50,7 +50,6 @@ void NPCManager::init() {
     REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_VENDOR_ITEM_SELL, npcVendorSell);
     REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_VENDOR_ITEM_RESTORE_BUY, npcVendorBuyback);
     REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_VENDOR_BATTERY_BUY, npcVendorBuyBattery);
-    REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_ITEM_COMBINATION, npcCombineItems);
     REGISTER_SHARD_PACKET(P_CL2FE_REQ_SHINY_PICKUP, eggPickup);
 
     REGISTER_SHARD_TIMER(eggStep, 1000);
@@ -141,10 +140,6 @@ void NPCManager::npcVendorBuy(CNSocket* sock, CNPacketData* data) {
         sock->sendPacket((void*)&failResp, P_FE2CL_REP_PC_VENDOR_ITEM_BUY_FAIL, sizeof(sP_FE2CL_REP_PC_VENDOR_ITEM_BUY_FAIL));
         return;
     }
-    // if vehicle
-    if (req->Item.iType == 10)
-        // set time limit: current time + 7days
-        req->Item.iTimeLimit = getTimestamp() + 604800;
 
     if (slot != req->iInvenSlotNum) {
         // possible item stacking?
@@ -207,7 +202,6 @@ void NPCManager::npcVendorSell(CNSocket* sock, CNPacketData* data) {
         item->iID = 0;
         item->iOpt = 0;
         item->iType = 0;
-        item->iTimeLimit = 0;
     }
 
     // response parameters
@@ -282,7 +276,6 @@ void NPCManager::npcVendorTable(CNSocket* sock, CNPacketData* data) {
         sItemBase base;
         base.iID = listings[i].iID;
         base.iOpt = 0;
-        base.iTimeLimit = 0;
         base.iType = listings[i].type;
 
         sItemVendor vItem;
@@ -344,92 +337,6 @@ void NPCManager::npcVendorBuyBattery(CNSocket* sock, CNPacketData* data) {
     resp.iBatteryN = plr->batteryN;
 
     sock->sendPacket((void*)&resp, P_FE2CL_REP_PC_VENDOR_BATTERY_BUY_SUCC, sizeof(sP_FE2CL_REP_PC_VENDOR_BATTERY_BUY_SUCC));
-}
-
-void NPCManager::npcCombineItems(CNSocket* sock, CNPacketData* data) {
-    if (data->size != sizeof(sP_CL2FE_REQ_PC_ITEM_COMBINATION))
-        return; // malformed packet
-
-    sP_CL2FE_REQ_PC_ITEM_COMBINATION* req = (sP_CL2FE_REQ_PC_ITEM_COMBINATION*)data->buf;
-    Player* plr = PlayerManager::getPlayer(sock);
-
-    if (req->iCostumeItemSlot < 0 || req->iCostumeItemSlot >= AINVEN_COUNT || req->iStatItemSlot < 0 || req->iStatItemSlot >= AINVEN_COUNT) { // sanity check 1
-        INITSTRUCT(sP_FE2CL_REP_PC_ITEM_COMBINATION_FAIL, failResp);
-        failResp.iCostumeItemSlot = req->iCostumeItemSlot;
-        failResp.iStatItemSlot = req->iStatItemSlot;
-        failResp.iErrorCode = 0;
-        sock->sendPacket((void*)&failResp, P_FE2CL_REP_PC_ITEM_COMBINATION_FAIL, sizeof(sP_FE2CL_REP_PC_ITEM_COMBINATION_FAIL));
-        std::cout << "[WARN] Inventory slot(s) out of range (" << req->iStatItemSlot << " and " << req->iCostumeItemSlot << ")" << std::endl;
-        return;
-    }
-
-    sItemBase* itemStats = &plr->Inven[req->iStatItemSlot];
-    sItemBase* itemLooks = &plr->Inven[req->iCostumeItemSlot];
-    ItemManager::Item* itemStatsDat = ItemManager::getItemData(itemStats->iID, itemStats->iType);
-    ItemManager::Item* itemLooksDat = ItemManager::getItemData(itemLooks->iID, itemLooks->iType);
-
-    if (itemStatsDat == nullptr || itemLooksDat == nullptr
-        || ItemManager::CrocPotTable.find(abs(itemStatsDat->level - itemLooksDat->level)) == ItemManager::CrocPotTable.end()) { // sanity check 2
-        INITSTRUCT(sP_FE2CL_REP_PC_ITEM_COMBINATION_FAIL, failResp);
-        failResp.iCostumeItemSlot = req->iCostumeItemSlot;
-        failResp.iStatItemSlot = req->iStatItemSlot;
-        failResp.iErrorCode = 0;
-        std::cout << "[WARN] Either item ids or croc pot value set not found" << std::endl;
-        sock->sendPacket((void*)&failResp, P_FE2CL_REP_PC_ITEM_COMBINATION_FAIL, sizeof(sP_FE2CL_REP_PC_ITEM_COMBINATION_FAIL));
-        return;
-    }
-
-    CrocPotEntry* recipe = &ItemManager::CrocPotTable[abs(itemStatsDat->level - itemLooksDat->level)];
-    int cost = itemStatsDat->buyPrice * recipe->multStats + itemLooksDat->buyPrice * recipe->multLooks;
-    float successChance = recipe->base / 100.0f; // base success chance
-
-    // rarity gap multiplier
-    switch(abs(itemStatsDat->rarity - itemLooksDat->rarity)) {
-    case 0:
-        successChance *= recipe->rd0;
-        break;
-    case 1:
-        successChance *= recipe->rd1;
-        break;
-    case 2:
-        successChance *= recipe->rd2;
-        break;
-    case 3:
-        successChance *= recipe->rd3;
-        break;
-    default:
-        break;
-    }
-
-    float rolled = (rand() * 1.0f / RAND_MAX) * 100.0f; // success chance out of 100
-    //std::cout << rolled << " vs " << successChance << std::endl;
-    plr->money -= cost;
-
-
-    INITSTRUCT(sP_FE2CL_REP_PC_ITEM_COMBINATION_SUCC, resp);
-    if (rolled < successChance) {
-        // success
-        resp.iSuccessFlag = 1;
-
-        // modify the looks item with the new stats and set the appearance through iOpt
-        itemLooks->iOpt = (int32_t)((itemLooks->iOpt) >> 16 > 0 ? (itemLooks->iOpt >> 16) : itemLooks->iID) << 16;
-        itemLooks->iID = itemStats->iID;
-
-        // delete stats item
-        itemStats->iID = 0;
-        itemStats->iOpt = 0;
-        itemStats->iTimeLimit = 0;
-        itemStats->iType = 0;
-    } else {
-        // failure; don't do anything?
-        resp.iSuccessFlag = 0;
-    }
-    resp.iCandy = plr->money;
-    resp.iNewItemSlot = req->iCostumeItemSlot;
-    resp.iStatItemSlot = req->iStatItemSlot;
-    resp.sNewItem = *itemLooks;
-
-    sock->sendPacket((void*)&resp, P_FE2CL_REP_PC_ITEM_COMBINATION_SUCC, sizeof(sP_FE2CL_REP_PC_ITEM_COMBINATION_SUCC));
 }
 
 void NPCManager::npcBarkHandler(CNSocket* sock, CNPacketData* data) {
@@ -532,21 +439,6 @@ void NPCManager::handleWarp(CNSocket* sock, int32_t warpId) {
     if (Warps.find(warpId) == Warps.end())
         return;
 
-    if (plr->iPCState & 8) {
-        // remove the player's vehicle
-        plr->iPCState &= ~8;
-
-        // send to self
-        INITSTRUCT(sP_FE2CL_PC_VEHICLE_OFF_SUCC, off);
-        sock->sendPacket((void*)&off, P_FE2CL_PC_VEHICLE_OFF_SUCC, sizeof(sP_FE2CL_PC_VEHICLE_OFF_SUCC));
-
-        // send to others
-        INITSTRUCT(sP_FE2CL_PC_STATE_CHANGE, chg);
-        chg.iPC_ID = plr->iID;
-        chg.iState = plr->iPCState;
-        PlayerManager::sendToViewable(sock, (void*)&chg, P_FE2CL_PC_STATE_CHANGE, sizeof(sP_FE2CL_PC_STATE_CHANGE));
-    }
-
     // std::cerr << "Warped to Map Num:" << Warps[warpId].instanceID << " NPC ID " << Warps[warpId].npcID << std::endl;
     if (Warps[warpId].isInstance) {
         uint64_t instanceID = Warps[warpId].instanceID;
@@ -580,22 +472,6 @@ void NPCManager::handleWarp(CNSocket* sock, int32_t warpId) {
                 otherPlr->recallY = Warps[warpId].y;
                 otherPlr->recallZ = Warps[warpId].z + RESURRECT_HEIGHT;
                 otherPlr->recallInstance = instanceID;
-
-                // remove their vehicle if they're on one
-                if (otherPlr->iPCState & 8) {
-                    // remove the player's vehicle
-                    otherPlr->iPCState &= ~8;
-
-                    // send to self
-                    INITSTRUCT(sP_FE2CL_PC_VEHICLE_OFF_SUCC, off);
-                    sockTo->sendPacket((void*)&off, P_FE2CL_PC_VEHICLE_OFF_SUCC, sizeof(sP_FE2CL_PC_VEHICLE_OFF_SUCC));
-
-                    // send to others
-                    INITSTRUCT(sP_FE2CL_PC_STATE_CHANGE, chg);
-                    chg.iPC_ID = otherPlr->iID;
-                    chg.iState = otherPlr->iPCState;
-                    PlayerManager::sendToViewable(sockTo, (void*)&chg, P_FE2CL_PC_STATE_CHANGE, sizeof(sP_FE2CL_PC_STATE_CHANGE));
-                }
 
                 PlayerManager::sendPlayerTo(sockTo, Warps[warpId].x, Warps[warpId].y, Warps[warpId].z, instanceID);
             }
