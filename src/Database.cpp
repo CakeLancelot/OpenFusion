@@ -734,7 +734,7 @@ void Database::getCharInfo(std::vector <sP_LS2CL_REP_CHAR_INFO>* result, int use
 
         // request aEquip
         const char* sql2 = R"(
-            SELECT Slot, Type, ID, Opt, TimeLimit
+            SELECT Slot, Type, ID, Opt
             FROM Inventory
             WHERE PlayerID = ? AND Slot < ?;
             )";
@@ -885,7 +885,7 @@ void Database::getPlayer(Player* plr, int id) {
 
     // get inventory
     sql = R"(
-        SELECT Slot, Type, ID, Opt, TimeLimit
+        SELECT Slot, Type, ID, Opt
         FROM Inventory
         WHERE PlayerID = ?;
         )";
@@ -1113,8 +1113,8 @@ void Database::updatePlayer(Player *player) {
 
     sql = R"(
         INSERT INTO Inventory
-            (PlayerID, Slot, Type, Opt, ID, Timelimit)
-        VALUES (?, ?, ?, ?, ?, ?);
+            (PlayerID, Slot, Type, Opt, ID)
+        VALUES (?, ?, ?, ?, ?);
         )";
     sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
 
@@ -1502,7 +1502,7 @@ sItemBase* Database::getEmailAttachments(int playerID, int index) {
         items[i] = { 0, 0, 0 };
 
     const char* sql = R"(
-        SELECT Slot, ID, Type, Opt, TimeLimit
+        SELECT Slot, ID, Type, Opt
         FROM EmailItems
         WHERE PlayerID = ? AND MsgIndex = ?;
         )";
@@ -1694,7 +1694,7 @@ bool Database::sendEmail(EmailData* data, std::vector<sItemBase> attachments) {
 
     sql = R"(
         INSERT INTO EmailItems
-            (PlayerID, MsgIndex, Slot, ID, Type, Opt, TimeLimit)
+            (PlayerID, MsgIndex, Slot, ID, Type, Opt)
         VALUES (?, ?, ?, ?, ?, ?, ?);
         )";
 

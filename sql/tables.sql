@@ -68,7 +68,6 @@ CREATE TABLE IF NOT EXISTS Inventory (
     ID          INTEGER NOT NULL,
     Type        INTEGER NOT NULL,
     Opt         INTEGER NOT NULL,
-    TimeLimit   INTEGER DEFAULT 0 NOT NULL,
     FOREIGN KEY(PlayerID) REFERENCES Players(PlayerID) ON DELETE CASCADE,
     UNIQUE (PlayerID, Slot)
 );
@@ -138,7 +137,6 @@ CREATE TABLE IF NOT EXISTS EmailItems (
     ID          INTEGER NOT NULL,
     Type        INTEGER NOT NULL,
     Opt         INTEGER NOT NULL,
-    TimeLimit   INTEGER NOT NULL,
     FOREIGN KEY(PlayerID) REFERENCES Players(PlayerID) ON DELETE CASCADE,
     UNIQUE (MsgIndex, Slot)
 );
