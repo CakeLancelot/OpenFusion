@@ -264,9 +264,21 @@ void TableData::init() {
         groupData = npcData["groups"];
         npcData = npcData["mobs"];
 
+        int npcLimit = NPCManager::NPCData.back()["m_iNpcNumber"];
+
         // single mobs
         for (nlohmann::json::iterator _npc = npcData.begin(); _npc != npcData.end(); _npc++) {
             auto npc = _npc.value();
+
+            int randType = 0; // placeholder
+
+            // keep making random numbers until we get an npc with iTeam == 2 (mob)
+            while (NPCManager::NPCData[randType]["m_iTeam"] != 2) {
+                randType = rand() % npcLimit + 1; 
+            }
+
+            npc["iNPCType"] = (int)randType;
+
             auto td = NPCManager::NPCData[(int)npc["iNPCType"]];
             uint64_t instanceID = npc.find("iMapNum") == npc.end() ? INSTANCE_OVERWORLD : (int)npc["iMapNum"];
 
@@ -288,7 +300,6 @@ void TableData::init() {
         }
 
         // mob groups
-        // single mobs
         for (nlohmann::json::iterator _group = groupData.begin(); _group != groupData.end(); _group++) {
             auto leader = _group.value();
             auto td = NPCManager::NPCData[(int)leader["iNPCType"]];
