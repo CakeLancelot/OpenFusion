@@ -198,7 +198,7 @@ static void vendorBuyback(CNSocket* sock, CNPacketData* data) {
 static void vendorTable(CNSocket* sock, CNPacketData* data) {
     auto req = (sP_CL2FE_REQ_PC_VENDOR_TABLE_UPDATE*)data->buf;
 
-    if (req->iVendorID != req->iNPC_ID || Vendors::VendorTables.find(req->iVendorID) == Vendors::VendorTables.end())
+    if (Vendors::VendorTables.find(req->iVendorID) == Vendors::VendorTables.end())
         return;
 
     std::vector<VendorListing> listings = Vendors::VendorTables[req->iVendorID];
