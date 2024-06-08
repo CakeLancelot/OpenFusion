@@ -2,40 +2,6 @@
 
 // Loading and saving players to/from the DB
 
-static void removeExpiredVehicles(Player* player) {
-    int32_t currentTime = getTimestamp();
-
-    // if there are expired vehicles in bank just remove them silently
-    for (int i = 0; i < ABANK_COUNT; i++) {
-        if (player->Bank[i].iType == 10 && player->Bank[i].iTimeLimit < currentTime && player->Bank[i].iTimeLimit != 0) {
-            memset(&player->Bank[i], 0, sizeof(sItemBase));
-        }
-    }
-
-    // we want to leave only 1 expired vehicle on player to delete it with the client packet
-    std::vector<sItemBase*> toRemove;
-
-    // equipped vehicle
-    if (player->Equip[8].iOpt > 0 && player->Equip[8].iTimeLimit < currentTime && player->Equip[8].iTimeLimit != 0) {
-        toRemove.push_back(&player->Equip[8]);
-        player->toRemoveVehicle.eIL = 0;
-        player->toRemoveVehicle.iSlotNum = 8;
-    }
-    // inventory
-    for (int i = 0; i < AINVEN_COUNT; i++) {
-        if (player->Inven[i].iType == 10 && player->Inven[i].iTimeLimit < currentTime && player->Inven[i].iTimeLimit != 0) {
-            toRemove.push_back(&player->Inven[i]);
-            player->toRemoveVehicle.eIL = 1;
-            player->toRemoveVehicle.iSlotNum = i;
-        }
-    }
-
-    // delete all but one vehicles, leave last one for ceremonial deletion
-    for (int i = 0; i < (int)toRemove.size()-1; i++) {
-        memset(toRemove[i], 0, sizeof(sItemBase));
-    }
-}
-
 void Database::getPlayer(Player* plr, int id) {
     std::lock_guard<std::mutex> lock(dbCrit);
 
@@ -122,7 +88,7 @@ void Database::getPlayer(Player* plr, int id) {
 
     // get inventory
     sql = R"(
-        SELECT Slot, Type, ID, Opt, TimeLimit
+        SELECT Slot, Type, ID, Opt
         FROM Inventory
         WHERE PlayerID = ?;
         )";
@@ -155,12 +121,9 @@ void Database::getPlayer(Player* plr, int id) {
         item->iType = sqlite3_column_int(stmt, 1);
         item->iID = sqlite3_column_int(stmt, 2);
         item->iOpt = sqlite3_column_int(stmt, 3);
-        item->iTimeLimit = sqlite3_column_int(stmt, 4);
     }
 
     sqlite3_finalize(stmt);
-
-    removeExpiredVehicles(plr);
 
     // get quest inventory
     sql = R"(
@@ -356,8 +319,8 @@ bool Database::_updatePlayer(Player *player) {
 
     sql = R"(
         INSERT INTO Inventory
-            (PlayerID, Slot, Type, Opt, ID, Timelimit)
-        VALUES (?, ?, ?, ?, ?, ?);
+            (PlayerID, Slot, Type, Opt, ID)
+        VALUES (?, ?, ?, ?, ?);
         )";
     sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
 
@@ -370,7 +333,6 @@ bool Database::_updatePlayer(Player *player) {
         sqlite3_bind_int(stmt, 3, player->Equip[i].iType);
         sqlite3_bind_int(stmt, 4, player->Equip[i].iOpt);
         sqlite3_bind_int(stmt, 5, player->Equip[i].iID);
-        sqlite3_bind_int(stmt, 6, player->Equip[i].iTimeLimit);
 
         rc = sqlite3_step(stmt);
 
@@ -390,7 +352,6 @@ bool Database::_updatePlayer(Player *player) {
         sqlite3_bind_int(stmt, 3, player->Inven[i].iType);
         sqlite3_bind_int(stmt, 4, player->Inven[i].iOpt);
         sqlite3_bind_int(stmt, 5, player->Inven[i].iID);
-        sqlite3_bind_int(stmt, 6, player->Inven[i].iTimeLimit);
 
         if (sqlite3_step(stmt) != SQLITE_DONE) {
             sqlite3_finalize(stmt);
@@ -408,7 +369,6 @@ bool Database::_updatePlayer(Player *player) {
         sqlite3_bind_int(stmt, 3, player->Bank[i].iType);
         sqlite3_bind_int(stmt, 4, player->Bank[i].iOpt);
         sqlite3_bind_int(stmt, 5, player->Bank[i].iID);
-        sqlite3_bind_int(stmt, 6, player->Bank[i].iTimeLimit);
 
         if (sqlite3_step(stmt) != SQLITE_DONE) {
             sqlite3_finalize(stmt);

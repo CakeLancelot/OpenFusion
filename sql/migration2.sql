@@ -23,7 +23,6 @@ CREATE TABLE Temp (
     ID          INTEGER NOT NULL,
     Type        INTEGER NOT NULL,
     Opt         INTEGER NOT NULL,
-    TimeLimit   INTEGER NOT NULL,
     FOREIGN KEY(PlayerID) REFERENCES Players(PlayerID) ON DELETE CASCADE,
     UNIQUE (PlayerID, MsgIndex, Slot)
 );

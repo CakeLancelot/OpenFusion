@@ -108,10 +108,10 @@ sItemBase* Database::getEmailAttachments(int playerID, int index) {
 
     sItemBase* items = new sItemBase[4];
     for (int i = 0; i < 4; i++)
-        items[i] = { 0, 0, 0, 0 };
+        items[i] = { 0, 0, 0 };
 
     const char* sql = R"(
-        SELECT Slot, ID, Type, Opt, TimeLimit
+        SELECT Slot, ID, Type, Opt
         FROM EmailItems
         WHERE PlayerID = ? AND MsgIndex = ?;
         )";
@@ -130,7 +130,6 @@ sItemBase* Database::getEmailAttachments(int playerID, int index) {
         items[slot].iID = sqlite3_column_int(stmt, 1);
         items[slot].iType = sqlite3_column_int(stmt, 2);
         items[slot].iOpt = sqlite3_column_int(stmt, 3);
-        items[slot].iTimeLimit = sqlite3_column_int(stmt, 4);
     }
 
     sqlite3_finalize(stmt);
@@ -305,8 +304,8 @@ bool Database::sendEmail(EmailData* data, std::vector<sItemBase> attachments, Pl
 
     sql = R"(
         INSERT INTO EmailItems
-            (PlayerID, MsgIndex, Slot, ID, Type, Opt, TimeLimit)
-        VALUES (?, ?, ?, ?, ?, ?, ?);
+            (PlayerID, MsgIndex, Slot, ID, Type, Opt)
+        VALUES (?, ?, ?, ?, ?, ?);
         )";
 
     sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
@@ -320,7 +319,6 @@ bool Database::sendEmail(EmailData* data, std::vector<sItemBase> attachments, Pl
         sqlite3_bind_int(stmt, 4, item.iID);
         sqlite3_bind_int(stmt, 5, item.iType);
         sqlite3_bind_int(stmt, 6, item.iOpt);
-        sqlite3_bind_int(stmt, 7, item.iTimeLimit);
 
         if (sqlite3_step(stmt) != SQLITE_DONE) {
             std::cout << "[WARN] Database: Failed to send email: " << sqlite3_errmsg(db) << std::endl;

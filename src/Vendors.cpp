@@ -59,12 +59,6 @@ static void vendorBuy(CNSocket* sock, CNPacketData* data) {
         return;
     }
 
-    // if vehicle
-    if (req->Item.iType == 10) {
-        // set time limit: current time + expiry duration
-        req->Item.iTimeLimit = getTimestamp() + VEHICLE_EXPIRY_DURATION;
-    }
-
     if (slot != req->iInvenSlotNum) {
         // possible item stacking?
         std::cout << "[WARN] Client and server disagree on bought item slot (" << req->iInvenSlotNum << " vs " << slot << ")" << std::endl;
@@ -180,8 +174,7 @@ static void vendorBuyback(CNSocket* sock, CNPacketData* data) {
          * XXX: we really need a standard item comparison function that
          * will work properly across all builds (ex. with iSerial)
          */
-        if (it->iType == item.iType && it->iID == item.iID && it->iOpt == item.iOpt
-            && it->iTimeLimit == item.iTimeLimit) {
+        if (it->iType == item.iType && it->iID == item.iID && it->iOpt == item.iOpt) {
             plr->buyback.erase(it);
             break;
         }
@@ -235,16 +228,6 @@ static void vendorTable(CNSocket* sock, CNPacketData* data) {
         sItemBase base = {};
         base.iID = listings[i].id;
         base.iType = listings[i].type;
-
-        /*
-         * Set vehicle expiry value.
-         *
-         * Note: sItemBase.iTimeLimit in the context of vendor listings contains
-         * a duration, unlike in most other contexts where it contains the
-         * expiration timestamp.
-         */
-        if (listings[i].type == 10)
-            base.iTimeLimit = VEHICLE_EXPIRY_DURATION;
 
         sItemVendor vItem;
         vItem.item = base;
@@ -302,98 +285,6 @@ static void vendorBuyBattery(CNSocket* sock, CNPacketData* data) {
     sock->sendPacket(resp, P_FE2CL_REP_PC_VENDOR_BATTERY_BUY_SUCC);
 }
 
-static void vendorCombineItems(CNSocket* sock, CNPacketData* data) {
-    auto req = (sP_CL2FE_REQ_PC_ITEM_COMBINATION*)data->buf;
-    Player* plr = PlayerManager::getPlayer(sock);
-
-    // prepare fail packet
-    INITSTRUCT(sP_FE2CL_REP_PC_ITEM_COMBINATION_FAIL, failResp);
-    failResp.iCostumeItemSlot = req->iCostumeItemSlot;
-    failResp.iStatItemSlot = req->iStatItemSlot;
-    failResp.iErrorCode = 0;
-
-    // sanity check slot indices
-    if (req->iCostumeItemSlot < 0 || req->iCostumeItemSlot >= AINVEN_COUNT || req->iStatItemSlot < 0 || req->iStatItemSlot >= AINVEN_COUNT) {
-        std::cout << "[WARN] Inventory slot(s) out of range (" << req->iStatItemSlot << " and " << req->iCostumeItemSlot << ")" << std::endl;
-        sock->sendPacket(failResp, P_FE2CL_REP_PC_ITEM_COMBINATION_FAIL);
-        return;
-    }
-
-    sItemBase* itemStats = &plr->Inven[req->iStatItemSlot];
-    sItemBase* itemLooks = &plr->Inven[req->iCostumeItemSlot];
-    Items::Item* itemStatsDat = Items::getItemData(itemStats->iID, itemStats->iType);
-    Items::Item* itemLooksDat = Items::getItemData(itemLooks->iID, itemLooks->iType);
-
-    // sanity check item and combination entry existence
-    if (itemStatsDat == nullptr || itemLooksDat == nullptr
-        || Items::CrocPotTable.find(abs(itemStatsDat->level - itemLooksDat->level)) == Items::CrocPotTable.end()) {
-        std::cout << "[WARN] Either item ids or croc pot value set not found" << std::endl;
-        sock->sendPacket(failResp, P_FE2CL_REP_PC_ITEM_COMBINATION_FAIL);
-        return;
-    }
-
-    // sanity check matching item types
-    if (itemStats->iType != itemLooks->iType
-        || (itemStats->iType == 0 && itemStatsDat->weaponType != itemLooksDat->weaponType)) {
-        std::cout << "[WARN] Player attempted to combine mismatched items" << std::endl;
-        sock->sendPacket(failResp, P_FE2CL_REP_PC_ITEM_COMBINATION_FAIL);
-        return;
-    }
-
-    CrocPotEntry* recipe = &Items::CrocPotTable[abs(itemStatsDat->level - itemLooksDat->level)];
-    int cost = itemStatsDat->buyPrice * recipe->multStats + itemLooksDat->buyPrice * recipe->multLooks;
-    float successChance = recipe->base / 100.0f; // base success chance
-
-    // rarity gap multiplier
-    switch (abs(itemStatsDat->rarity - itemLooksDat->rarity)) {
-    case 0:
-        successChance *= recipe->rd0;
-        break;
-    case 1:
-        successChance *= recipe->rd1;
-        break;
-    case 2:
-        successChance *= recipe->rd2;
-        break;
-    case 3:
-        successChance *= recipe->rd3;
-        break;
-    default:
-        break;
-    }
-
-    float rolled = Rand::randFloat(100.0f); // success chance out of 100
-    //std::cout << rolled << " vs " << successChance << std::endl;
-    plr->money -= cost;
-
-
-    INITSTRUCT(sP_FE2CL_REP_PC_ITEM_COMBINATION_SUCC, resp);
-    if (rolled < successChance) {
-        // success
-        resp.iSuccessFlag = 1;
-
-        // modify the looks item with the new stats and set the appearance through iOpt
-        itemLooks->iOpt = (int32_t)((itemLooks->iOpt) >> 16 > 0 ? (itemLooks->iOpt >> 16) : itemLooks->iID) << 16;
-        itemLooks->iID = itemStats->iID;
-
-        // delete stats item
-        itemStats->iID = 0;
-        itemStats->iOpt = 0;
-        itemStats->iTimeLimit = 0;
-        itemStats->iType = 0;
-    }
-    else {
-        // failure; don't do anything?
-        resp.iSuccessFlag = 0;
-    }
-    resp.iCandy = plr->money;
-    resp.iNewItemSlot = req->iCostumeItemSlot;
-    resp.iStatItemSlot = req->iStatItemSlot;
-    resp.sNewItem = *itemLooks;
-
-    sock->sendPacket(resp, P_FE2CL_REP_PC_ITEM_COMBINATION_SUCC);
-}
-
 void Vendors::init() {
     REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_VENDOR_START, vendorStart);
     REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_VENDOR_TABLE_UPDATE, vendorTable);
@@ -401,5 +292,4 @@ void Vendors::init() {
     REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_VENDOR_ITEM_SELL, vendorSell);
     REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_VENDOR_ITEM_RESTORE_BUY, vendorBuyback);
     REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_VENDOR_BATTERY_BUY, vendorBuyBattery);
-    REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_ITEM_COMBINATION, vendorCombineItems);
 }

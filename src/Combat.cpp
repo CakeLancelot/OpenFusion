@@ -610,112 +610,6 @@ static void dotDamageOnOff(CNSocket *sock, CNPacketData *data) {
     }
 }
 
-static void pcAttackChars(CNSocket *sock, CNPacketData *data) {
-    sP_CL2FE_REQ_PC_ATTACK_CHARs* pkt = (sP_CL2FE_REQ_PC_ATTACK_CHARs*)data->buf;
-    Player *plr = PlayerManager::getPlayer(sock);
-
-    // only GMs can use this variant
-    if (plr->accountLevel > 30)
-        return;
-
-    // Unlike the attack mob packet, attacking players packet has an 8-byte trail (Instead of 4 bytes).
-    if (!validInVarPacket(sizeof(sP_CL2FE_REQ_PC_ATTACK_CHARs), pkt->iTargetCnt, sizeof(sGM_PVPTarget), data->size)) {
-        std::cout << "[WARN] bad sP_CL2FE_REQ_PC_ATTACK_CHARs packet size\n";
-        return;
-    }
-
-    sGM_PVPTarget* pktdata = (sGM_PVPTarget*)((uint8_t*)data->buf + sizeof(sP_CL2FE_REQ_PC_ATTACK_CHARs));
-
-    if (!validOutVarPacket(sizeof(sP_FE2CL_PC_ATTACK_CHARs_SUCC), pkt->iTargetCnt, sizeof(sAttackResult))) {
-        std::cout << "[WARN] bad sP_FE2CL_PC_ATTACK_CHARs_SUCC packet size\n";
-        return;
-    }
-
-    // initialize response struct
-    size_t resplen = sizeof(sP_FE2CL_PC_ATTACK_CHARs_SUCC) + pkt->iTargetCnt * sizeof(sAttackResult);
-    uint8_t respbuf[CN_PACKET_BUFFER_SIZE];
-
-    memset(respbuf, 0, resplen);
-
-    sP_FE2CL_PC_ATTACK_CHARs_SUCC *resp = (sP_FE2CL_PC_ATTACK_CHARs_SUCC*)respbuf;
-    sAttackResult *respdata = (sAttackResult*)(respbuf+sizeof(sP_FE2CL_PC_ATTACK_CHARs_SUCC));
-
-    resp->iTargetCnt = pkt->iTargetCnt;
-
-    for (int i = 0; i < pkt->iTargetCnt; i++) {
-
-        ICombatant* target = nullptr;
-        std::pair<int, int> damage;
-
-        if (pkt->iTargetCnt > 1)
-            damage.first = plr->groupDamage;
-        else
-            damage.first = plr->pointDamage;
-
-        if (pktdata[i].eCT == 1) { // eCT == 1; attack player
-
-            for (auto& pair : PlayerManager::players) {
-                if (pair.second->iID == pktdata[i].iID) {
-                    target = pair.second;
-                    break;
-                }
-            }
-
-            if (target == nullptr) {
-                // you shall not pass
-                std::cout << "[WARN] pcAttackChars: player ID not found" << std::endl;
-                return;
-            }
-
-            damage = getDamage(damage.first, ((Player*)target)->defense, true, (plr->batteryW > 6 + plr->level), -1, -1, 0);
-
-        } else { // eCT == 4; attack mob
-
-            if (NPCManager::NPCs.find(pktdata[i].iID) == NPCManager::NPCs.end()) {
-                // not sure how to best handle this
-                std::cout << "[WARN] pcAttackChars: NPC ID not found" << std::endl;
-                return;
-            }
-
-            BaseNPC* npc = NPCManager::NPCs[pktdata[i].iID];
-            if (npc->kind != EntityKind::MOB) {
-                std::cout << "[WARN] pcAttackChars: NPC is not a mob" << std::endl;
-                return;
-            }
-
-            Mob* mob = (Mob*)npc;
-            target = mob;
-            int difficulty = (int)mob->data["m_iNpcLevel"];
-            damage = getDamage(damage.first, (int)mob->data["m_iProtection"], true, (plr->batteryW > 6 + difficulty),
-                Nanos::nanoStyle(plr->activeNano), (int)mob->data["m_iNpcStyle"], difficulty);
-        }
-
-        if (plr->batteryW >= 6 + plr->level)
-            plr->batteryW -= 6 + plr->level;
-        else
-            plr->batteryW = 0;
-
-        damage.first = target->takeDamage(sock, damage.first);
-
-        respdata[i].eCT = pktdata[i].eCT;
-        respdata[i].iID = target->getID();
-        respdata[i].iDamage = damage.first;
-        respdata[i].iHP = target->getCurrentHP();
-        respdata[i].iHitFlag = damage.second; // hitscan, not a rocket or a grenade
-    }
-
-    sock->sendPacket((void*)respbuf, P_FE2CL_PC_ATTACK_CHARs_SUCC, resplen);
-
-    // a bit of a hack: these are the same size, so we can reuse the response packet
-    assert(sizeof(sP_FE2CL_PC_ATTACK_CHARs_SUCC) == sizeof(sP_FE2CL_PC_ATTACK_CHARs));
-    sP_FE2CL_PC_ATTACK_CHARs *resp1 = (sP_FE2CL_PC_ATTACK_CHARs*)respbuf;
-
-    resp1->iPC_ID = plr->iID;
-
-    // send to other players
-    PlayerManager::sendToViewable(sock, (void*)respbuf, P_FE2CL_PC_ATTACK_CHARs, resplen);
-}
-
 static int8_t addBullet(Player* plr, bool isGrenade) {
 
     int8_t findId = 0;
@@ -811,14 +705,14 @@ static void projectileHit(CNSocket* sock, CNPacketData* data) {
     sP_CL2FE_REQ_PC_ROCKET_STYLE_HIT* pkt = (sP_CL2FE_REQ_PC_ROCKET_STYLE_HIT*)data->buf;
     Player* plr = PlayerManager::getPlayer(sock);
 
-    if (pkt->iTargetCnt == 0) {
+    if (pkt->iNPCCnt == 0) {
         Bullets[plr->iID].erase(pkt->iBulletID);
         // no targets hit, don't send response
         return;
     }
 
     // sanity check
-    if (!validInVarPacket(sizeof(sP_CL2FE_REQ_PC_ROCKET_STYLE_HIT), pkt->iTargetCnt, sizeof(int64_t), data->size)) {
+    if (!validInVarPacket(sizeof(sP_CL2FE_REQ_PC_ROCKET_STYLE_HIT), pkt->iNPCCnt, sizeof(int64_t), data->size)) {
         std::cout << "[WARN] bad sP_CL2FE_REQ_PC_ROCKET_STYLE_HIT packet size\n";
         return;
     }
@@ -832,13 +726,13 @@ static void projectileHit(CNSocket* sock, CNPacketData* data) {
      * both incoming and outgoing variable-length packets must be validated, at least if
      * the number of trailing structs isn't well known (ie. it's from the client).
      */
-    if (!validOutVarPacket(sizeof(sP_FE2CL_PC_GRENADE_STYLE_HIT), pkt->iTargetCnt, sizeof(sAttackResult))) {
+    if (!validOutVarPacket(sizeof(sP_FE2CL_PC_GRENADE_STYLE_HIT), pkt->iNPCCnt, sizeof(sAttackResult))) {
         std::cout << "[WARN] bad sP_FE2CL_PC_GRENADE_STYLE_HIT packet size\n";
         return;
     }
 
     // kick the player if firing too rapidly
-    if (settings::ANTICHEAT && checkRapidFire(sock, pkt->iTargetCnt, true))
+    if (settings::ANTICHEAT && checkRapidFire(sock, pkt->iNPCCnt, true))
         return;
 
     /*
@@ -846,7 +740,7 @@ static void projectileHit(CNSocket* sock, CNPacketData* data) {
      * rocket style hit doesn't work properly, so we're always sending this one
      */
 
-    size_t resplen = sizeof(sP_FE2CL_PC_GRENADE_STYLE_HIT) + pkt->iTargetCnt * sizeof(sAttackResult);
+    size_t resplen = sizeof(sP_FE2CL_PC_GRENADE_STYLE_HIT) + pkt->iNPCCnt * sizeof(sAttackResult);
     uint8_t respbuf[CN_PACKET_BUFFER_SIZE];
 
     memset(respbuf, 0, resplen);
@@ -854,14 +748,14 @@ static void projectileHit(CNSocket* sock, CNPacketData* data) {
     sP_FE2CL_PC_GRENADE_STYLE_HIT* resp = (sP_FE2CL_PC_GRENADE_STYLE_HIT*)respbuf;
     sAttackResult* respdata = (sAttackResult*)(respbuf + sizeof(sP_FE2CL_PC_GRENADE_STYLE_HIT));
 
-    resp->iTargetCnt = pkt->iTargetCnt;
+    resp->iNPCCnt = pkt->iNPCCnt;
     if (Bullets.find(plr->iID) == Bullets.end() || Bullets[plr->iID].find(pkt->iBulletID) == Bullets[plr->iID].end()) {
         std::cout << "[WARN] projectileHit: bullet not found" << std::endl;
         return;
     }
     Bullet* bullet = &Bullets[plr->iID][pkt->iBulletID];
 
-    for (int i = 0; i < pkt->iTargetCnt; i++) {
+    for (int i = 0; i < pkt->iNPCCnt; i++) {
         if (NPCManager::NPCs.find(pktdata[i]) == NPCManager::NPCs.end()) {
             // not sure how to best handle this
             std::cout << "[WARN] projectileHit: NPC ID not found" << std::endl;
@@ -877,7 +771,7 @@ static void projectileHit(CNSocket* sock, CNPacketData* data) {
         Mob* mob = (Mob*)npc;
         std::pair<int, int> damage;
 
-        damage.first = pkt->iTargetCnt > 1 ? bullet->groupDamage : bullet->pointDamage;
+        damage.first = pkt->iNPCCnt > 1 ? bullet->groupDamage : bullet->pointDamage;
 
         int difficulty = (int)mob->data["m_iNpcLevel"];
         damage = getDamage(damage.first, (int)mob->data["m_iProtection"], true, bullet->weaponBoost, Nanos::nanoStyle(plr->activeNano), (int)mob->data["m_iNpcStyle"], difficulty);
@@ -1003,7 +897,6 @@ void Combat::init() {
     REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_COMBAT_BEGIN, combatBegin);
     REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_COMBAT_END, combatEnd);
     REGISTER_SHARD_PACKET(P_CL2FE_DOT_DAMAGE_ONOFF, dotDamageOnOff);
-    REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_ATTACK_CHARs, pcAttackChars);
 
     REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_GRENADE_STYLE_FIRE, grenadeFire);
     REGISTER_SHARD_PACKET(P_CL2FE_REQ_PC_ROCKET_STYLE_FIRE, rocketFire);

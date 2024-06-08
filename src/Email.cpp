@@ -105,7 +105,6 @@ static void emailReceiveItemSingle(CNSocket* sock, CNPacketData* data) {
     sItemBase& itemTo = plr->Inven[pkt->iSlotNum];
     itemTo.iID = itemFrom.iID;
     itemTo.iOpt = itemFrom.iOpt;
-    itemTo.iTimeLimit = itemFrom.iTimeLimit;
     itemTo.iType = itemFrom.iType;
 
     INITSTRUCT(sP_FE2CL_REP_PC_RECV_EMAIL_ITEM_SUCC, resp);
@@ -145,7 +144,6 @@ static void emailReceiveItemAll(CNSocket* sock, CNPacketData* data) {
         sItemBase& itemTo = plr->Inven[slot];
         itemTo.iID = itemFrom.iID;
         itemTo.iOpt = itemFrom.iOpt;
-        itemTo.iTimeLimit = itemFrom.iTimeLimit;
         itemTo.iType = itemFrom.iType;
 
         // update inventory
@@ -259,7 +257,7 @@ static void emailSend(CNSocket* sock, CNPacketData* data) {
         attachments.push_back(attachment.ItemInven);
         attSlots.push_back(attachment.iSlotNum);
         if (real->iOpt <= item->iOpt) // delete item (if they attached the whole stack)
-            *real = { 0, 0, 0, 0 };
+            *real = { 0, 0, 0 };
         else // otherwise, decrement the item
             real->iOpt -= item->iOpt;
 

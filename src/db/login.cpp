@@ -485,7 +485,7 @@ void Database::getCharInfo(std::vector <sP_LS2CL_REP_CHAR_INFO>* result, int use
 
         // request aEquip
         const char* sql2 = R"(
-            SELECT Slot, Type, ID, Opt, TimeLimit
+            SELECT Slot, Type, ID, Opt
             FROM Inventory
             WHERE PlayerID = ? AND Slot < ?;
             )";
@@ -495,12 +495,22 @@ void Database::getCharInfo(std::vector <sP_LS2CL_REP_CHAR_INFO>* result, int use
         sqlite3_bind_int(stmt2, 1, toAdd.sPC_Style.iPC_UID);
         sqlite3_bind_int(stmt2, 2, AEQUIP_COUNT);
 
+        sOnItem* item = &toAdd.sOn_Item;
         while (sqlite3_step(stmt2) == SQLITE_ROW) {
-            sItemBase* item = &toAdd.aEquip[sqlite3_column_int(stmt2, 0)];
-            item->iType = sqlite3_column_int(stmt2, 1);
-            item->iID = sqlite3_column_int(stmt2, 2);
-            item->iOpt = sqlite3_column_int(stmt2, 3);
-            item->iTimeLimit = sqlite3_column_int(stmt2, 4);
+            if (sqlite3_column_int(stmt2, 1) == 0)
+                item->iEquipHandID = sqlite3_column_int(stmt2, 2);
+            else if (sqlite3_column_int(stmt2, 1) == 1)
+                item->iEquipUBID = sqlite3_column_int(stmt2, 2);
+            else if (sqlite3_column_int(stmt2, 1) == 2)
+                item->iEquipLBID = sqlite3_column_int(stmt2, 2);
+            else if (sqlite3_column_int(stmt2, 1) == 3)
+                item->iEquipFootID = sqlite3_column_int(stmt2, 2);
+            else if (sqlite3_column_int(stmt2, 1) == 4)
+                item->iEquipHeadID = sqlite3_column_int(stmt2, 2);
+            else if (sqlite3_column_int(stmt2, 1) == 5)
+                item->iEquipFaceID = sqlite3_column_int(stmt2, 2);
+            else if (sqlite3_column_int(stmt2, 1) == 6)
+                item->iEquipBackID = sqlite3_column_int(stmt2, 2);
         }
         sqlite3_finalize(stmt2);
 

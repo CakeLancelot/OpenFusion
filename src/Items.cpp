@@ -322,9 +322,7 @@ static void itemMoveHandler(CNSocket* sock, CNPacketData* data) {
 
     // if equipping an item, validate that it's of the correct type for the slot
     if ((SlotType)itemmove->eTo == SlotType::EQUIP) {
-        if (fromItem->iType == 10 && itemmove->iToSlotNum != 8)
-            return; // vehicle in wrong slot
-        else if (fromItem->iType != 10
+        if (fromItem->iType != 10
               && !(fromItem->iType == 0 && itemmove->iToSlotNum == 7)
               && fromItem->iType != itemmove->iToSlotNum)
             return; // something other than a vehicle or a weapon in a non-matching slot
@@ -356,7 +354,6 @@ static void itemMoveHandler(CNSocket* sock, CNPacketData* data) {
             // delete item
             fromItem->iID = 0;
             fromItem->iType = 0;
-            fromItem->iTimeLimit = 0;
         }
 
         resp.iFromSlotNum = itemmove->iFromSlotNum;
@@ -383,20 +380,6 @@ static void itemMoveHandler(CNSocket* sock, CNPacketData* data) {
         } else {
             equipChange.iEquipSlotNum = itemmove->iFromSlotNum;
             equipChange.EquipSlotItem = resp.ToSlotItem;
-        }
-
-        // unequip vehicle if equip slot 8 is 0
-        if (plr->Equip[8].iID == 0 && plr->iPCState & 8) {
-            INITSTRUCT(sP_FE2CL_PC_VEHICLE_OFF_SUCC, response);
-            sock->sendPacket(response, P_FE2CL_PC_VEHICLE_OFF_SUCC);
-
-            // send to other players
-            plr->iPCState &= ~8;
-            INITSTRUCT(sP_FE2CL_PC_STATE_CHANGE, response2);
-            response2.iPC_ID = plr->iID;
-            response2.iState = plr->iPCState;
-
-            PlayerManager::sendToViewable(sock, response2, P_FE2CL_PC_STATE_CHANGE);
         }
 
         // send equip event to other players
@@ -523,7 +506,6 @@ static void itemBankOpenHandler(CNSocket* sock, CNPacketData* data) {
     for (int i = 0; i < ABANK_COUNT; i++) {
         resp.aBank[i] = plr->Bank[i];
     }
-    resp.iExtraBank = 1;
     sock->sendPacket(resp, P_FE2CL_REP_PC_BANK_OPEN_SUCC);
 }
 
@@ -630,41 +612,6 @@ Item* Items::getItemData(int32_t id, int32_t type) {
     if(ItemData.find(std::make_pair(id, type)) !=  ItemData.end())
         return &ItemData[std::make_pair(id, type)];
     return nullptr;
-}
-
-void Items::checkItemExpire(CNSocket* sock, Player* player) {
-    if (player->toRemoveVehicle.eIL == 0 && player->toRemoveVehicle.iSlotNum == 0)
-        return;
-
-    /* prepare packet
-    * yes, this is a varadic packet, however analyzing client behavior and code
-    * it only checks takes the first item sent into account
-    * yes, this is very stupid
-    * therefore, we delete all but 1 expired vehicle while loading player
-    * to delete the last one here so player gets a notification
-    */
-
-    const size_t resplen = sizeof(sP_FE2CL_PC_DELETE_TIME_LIMIT_ITEM) + sizeof(sTimeLimitItemDeleteInfo2CL);
-    assert(resplen < CN_PACKET_BUFFER_SIZE - 8);
-    // we know it's only one trailing struct, so we can skip full validation
-    uint8_t respbuf[resplen]; // not a variable length array, don't worry
-    auto packet = (sP_FE2CL_PC_DELETE_TIME_LIMIT_ITEM*)respbuf;
-    sTimeLimitItemDeleteInfo2CL* itemData = (sTimeLimitItemDeleteInfo2CL*)(respbuf + sizeof(sP_FE2CL_PC_DELETE_TIME_LIMIT_ITEM));
-    memset(respbuf, 0, resplen);
-
-    packet->iItemListCount = 1;
-    itemData->eIL = player->toRemoveVehicle.eIL;
-    itemData->iSlotNum = player->toRemoveVehicle.iSlotNum;
-    sock->sendPacket((void*)&respbuf, P_FE2CL_PC_DELETE_TIME_LIMIT_ITEM, resplen);
-
-    // delete serverside
-    if (player->toRemoveVehicle.eIL == 0)
-        memset(&player->Equip[8], 0, sizeof(sItemBase));
-    else
-        memset(&player->Inven[player->toRemoveVehicle.iSlotNum], 0, sizeof(sItemBase));
-
-    player->toRemoveVehicle.eIL = 0;
-    player->toRemoveVehicle.iSlotNum = 0;
 }
 
 void Items::setItemStats(Player* plr) {

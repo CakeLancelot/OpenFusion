@@ -168,7 +168,6 @@ static void racingEnd(CNSocket* sock, CNPacketData* data) {
     item.iID = rankRewards->at(rank); // rank scores and rewards line up
     item.iType = 9;
     item.iOpt = 1;
-    item.iTimeLimit = 0;
     reward.sItem = item;
 
     if (reward.iSlotNum > -1 && reward.sItem.iID != 0) {

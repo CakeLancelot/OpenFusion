@@ -310,13 +310,7 @@ static void itemGMGiveHandler(CNSocket* sock, CNPacketData* data) {
             std::cout << "[WARN] Item id " << itemreq->Item.iID << " with type " << itemreq->Item.iType << " is invalid (give item)" << std::endl;
             return;
         }
-
-        if (itemreq->Item.iType == 10) {
-            // item is vehicle, set expiration date
-            // set time limit: current time + 7days
-            itemreq->Item.iTimeLimit = getTimestamp() + 604800;
-        }
-
+        
         plr->Inven[itemreq->iSlotNum] = itemreq->Item;
     } else if (itemreq->eIL == 2) {
         int id = itemreq->Item.iID;

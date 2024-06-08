@@ -793,12 +793,12 @@ static void redeemCommand(std::string full, std::vector<std::string>& args, CNSo
 
             // delete any temp items we might have set
             for (int j = 0; j < i; j++) {
-                plr->Inven[slots[j]] = { 0, 0, 0, 0 }; // empty
+                plr->Inven[slots[j]] = { 0, 0, 0 }; // empty
             }
             return;
         }
 
-        plr->Inven[slots[i]] = { 999, 999, 999, 0 }; // temp item; overwritten later
+        plr->Inven[slots[i]] = { 999, 999, 999 }; // temp item; overwritten later
     }
     
     Database::recordCodeRedemption(plr->iID, code);
