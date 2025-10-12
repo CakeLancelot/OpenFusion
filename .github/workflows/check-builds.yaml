@@ -59,6 +59,46 @@ jobs:
           name: 'ubuntu22_04-bin-x64-${{ env.SHORT_SHA }}'
           path: bin
 
+  macos-build:
+    runs-on: macos-latest
+    steps:
+      - name: Set environment
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+        shell: bash
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - name: Install dependencies
+        run: brew install --cask powershell
+      - name: Check compilation
+        run: |
+          $versions = "104", "728", "1013"
+
+          foreach ($version in $versions) {
+              Write-Output "Cleaning old output"
+              Invoke-Expression "make clean"
+              if ($LASTEXITCODE -ne "0") {
+                  Write-Error "make clean failed for version $version" -ErrorAction Stop
+              }
+              Write-Output "Building version $version"
+              Invoke-Expression "make -j8 PROTOCOL_VERSION=$version"
+              if ($LASTEXITCODE -ne "0") {
+                  Write-Error "make failed for version $version" -ErrorAction Stop
+              }
+              Rename-Item -Path "bin/fusion" -newName "$version-fusion"
+              Write-Output "Built version $version"
+          }
+          Copy-Item -Path "tdata" -Destination "bin/tdata" -Recurse
+          Copy-Item -Path "sql" -Destination "bin/sql" -Recurse
+          Copy-Item -Path "config.ini" -Destination "bin"
+        shell: pwsh
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 'macos-bin-aarch64-${{ env.SHORT_SHA }}'
+          path: bin
+
   windows-build:
     runs-on: windows-2022
     steps:

@@ -6,7 +6,7 @@ CXX=clang++
 # If compiling with ASAN, invoke like this: $ LSAN_OPTIONS=suppressions=suppr.txt bin/fusion
 CFLAGS=-Wall -Wno-unknown-pragmas -O2 -fPIE -D_FORTIFY_SOURCE=1 -fstack-protector #-g3 -fsanitize=address
 CXXFLAGS=$(CFLAGS) -std=c++17 -DPROTOCOL_VERSION=$(PROTOCOL_VERSION) -DGIT_VERSION=\"$(GIT_VERSION)\" -I./src -I./vendor
-LDFLAGS=-lpthread -lsqlite3 -pie -Wl,-z,relro -Wl,-z,now #-g3 -fsanitize=address
+LDFLAGS=-lpthread -lsqlite3 -pie #-Wl,-z,relro -Wl,-z,now #-g3 -fsanitize=address
 # specifies the name of our exectuable
 SERVER=bin/fusion
 
