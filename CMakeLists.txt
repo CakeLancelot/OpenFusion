@@ -1,4 +1,10 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.14)
+
+if (NOT DEFINED CMAKE_TOOLCHAIN_FILE AND DEFINED ${VCPKG_ROOT})
+	set(CMAKE_TOOLCHAIN_FILE "${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
+	set(VCPKG_TARGET_TRIPLET "$ENV{VCPKG_DEFAULT_TRIPLET}")
+endif()
+
 project(OpenFusion)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -44,7 +50,7 @@ add_executable(openfusion ${SOURCES})
 
 set_target_properties(openfusion PROPERTIES OUTPUT_NAME ${BIN_NAME})
 
-# find sqlite3 and use it
+# Find sqlite3 and use it
 find_package(SQLite3 REQUIRED)
 target_include_directories(openfusion PRIVATE ${SQLite3_INCLUDE_DIRS})
 target_link_libraries(openfusion PRIVATE ${SQLite3_LIBRARIES})

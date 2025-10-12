@@ -1,0 +1,8 @@
+{
+	"dependencies": [
+		{
+		  "name": "sqlite3",
+		  "version>=": "3.33.0"
+		}
+	]
+}
